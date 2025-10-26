@@ -1,0 +1,14 @@
+[
+    {
+        "id": 11,
+        "privatekey": "example_private_key",
+        "address": "1.2.3.4/27",
+        "listenport": 51820
+    },
+    {
+        "id": 12,
+        "privatekey": "example_private_key",
+        "address": "2.2.2.2/27",
+        "listenport": 51820
+    }
+]

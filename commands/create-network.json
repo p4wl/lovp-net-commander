@@ -1,0 +1,9 @@
+{
+    "command": "create-network",
+    "owner" : "test-user",
+    "createdAt" : "26.10.2025T13:28:00",
+    "network" : {
+        "name" : "test-user-network-1",
+        "numberOfPeers" : "3"
+    }
+}

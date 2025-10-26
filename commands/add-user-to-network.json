@@ -1,0 +1,10 @@
+{
+    "command": "add-user",
+    "owner" : "test-user",
+    "createdAt" : "26.10.2025T13:28:00",
+    "addUser" : {
+        "user" : "guest-user-1",
+        "network" : "test-user-network-1",
+        "maxTime" : "12h"
+    }
+}

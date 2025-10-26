@@ -1,0 +1,15 @@
+{
+    "command" : {
+        "cmd" : "command-name",
+        "createdAt" : "timestamp",
+        "createdBy" : "service-name",
+        "uuid" : "uuid"
+    },
+    "commandDetails" : {
+        "type" : "createNetwork/addUser/removeUser/removeNetwork",
+        "owner" : "network-owmer",
+        "userName" : "userName",
+        "networkName" : "networkName"
+    }
+    
+}

@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+database:
+  user: postgres
+  password: devpass
+  name: hbnetwork
+  host: localhost
+  port: 5432
+  sslMode: disable
+
+kafka:
+  topic: internal-msgs
+  consumerGroup: net-commander
+  brokers: localhost:9092
