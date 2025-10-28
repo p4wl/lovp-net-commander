@@ -79,6 +79,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const findUserId = `-- name: FindUserId :one
+SELECT id FROM users where username = $1
+`
+
+func (q *Queries) FindUserId(ctx context.Context, username string) (int32, error) {
+	row := q.db.QueryRow(ctx, findUserId, username)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getNetworkByOwner = `-- name: GetNetworkByOwner :one
 SELECT id, name, cidr, owner_id, created_at
 FROM networks
@@ -142,6 +153,19 @@ func (q *Queries) GetSubnetsWithPeers(ctx context.Context) ([]GetSubnetsWithPeer
 		return nil, err
 	}
 	return items, nil
+}
+
+const isUserExist = `-- name: IsUserExist :one
+SELECT EXISTS (
+    SELECT 1 FROM users u WHERE u.id = $1
+) AS user_exist
+`
+
+func (q *Queries) IsUserExist(ctx context.Context, id int32) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserExist, id)
+	var user_exist bool
+	err := row.Scan(&user_exist)
+	return user_exist, err
 }
 
 const listNetworkUsers = `-- name: ListNetworkUsers :many

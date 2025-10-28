@@ -58,9 +58,9 @@ func (a *App) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to kafka: %w", err)
 	}
 
-	nm := service.NewNetManger(db, ctx, a.logger)
+	netManger := service.NewNetManger(db, ctx, a.logger)
 	stopService := make(chan bool, 1)
-	netService := service.NewCommandHandlerService(a.logger, dataChannel, nm)
+	netService := service.NewCommandHandlerService(a.logger, dataChannel, netManger)
 	netService.HandleRawCmd(stopService)
 
 	server := http.Server{

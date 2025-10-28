@@ -42,7 +42,7 @@ func (s *CommandHandlerService) HandleRawCmd(stop chan bool) {
 				switch envelope.EventType {
 				case events.CREATE_NETWORK:
 					var cmd events.NetworkCreateCmd
-					if err := json.Unmarshal(msg, &cmd); err != nil {
+					if err := json.Unmarshal(envelope.Data, &cmd); err != nil {
 						s.logger.Error(fmt.Sprintf("Could not unmarshal event command %s", string(msg)))
 						continue
 					}
@@ -52,9 +52,28 @@ func (s *CommandHandlerService) HandleRawCmd(stop chan bool) {
 						s.logger.Error("Failed to create network", "error", err)
 						continue
 					}
+				case events.DELETE_NETWORK:
+					var cmd events.NetworkDeleteCmd
+					if err := json.Unmarshal(envelope.Data, &cmd); err != nil {
+						s.logger.Error(fmt.Sprintf("Could not unmarshal event command %s", string(msg)))
+						continue
+					}
+
+					// create and call s.nm.DeleteNetwork()
+
 				case events.CREATE_USER:
 					// unmarshal as events.UserCreateCmd
-					s.nm.RegisterUser("username", "some@em.com")
+					var cmd events.UserCreateCmd
+					if err := json.Unmarshal(envelope.Data, &cmd); err != nil {
+						s.logger.Error(fmt.Sprintf("Could not unmarshal event command %s", string(msg)))
+						continue
+					}
+
+					err := s.nm.RegisterUser(cmd.Username, cmd.Email)
+					if err != nil {
+						s.logger.Error("Failed to register user", "error", err)
+						continue
+					}
 				case events.ADD_USER_TO_NETWORK:
 				default:
 					s.logger.Error("Unknown command")

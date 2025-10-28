@@ -5,7 +5,7 @@ go 1.25.1
 require (
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/jackc/pgx/v5 v5.7.6
-	github.com/p4wl/lovp-shared-models v0.0.2
+	github.com/p4wl/lovp-shared-models v0.0.3
 	github.com/segmentio/kafka-go v0.4.49
 	github.com/spf13/viper v1.21.0
 )

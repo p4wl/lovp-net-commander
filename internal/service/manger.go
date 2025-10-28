@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
 	"net"
+	"sort"
 
 	"net-commander-server/internal/repository"
 
@@ -31,6 +33,10 @@ type NetManager struct {
 	repo   repository.Queries
 	ctx    context.Context
 }
+
+const (
+	STARTING_SUBNET = "10.10.0.0/27"
+)
 
 var (
 	mask         string = "27"
@@ -207,6 +213,41 @@ func NextSubnet(sIP *net.IP, mask *net.IPMask) (*net.IP, error) {
 	return &next, nil
 }
 
+func NextSubnet2(sIP net.IP, mask net.IPMask) (net.IP, error) {
+	// Normalize IP to 4 bytes for IPv4 or 16 for IPv6
+	ip := sIP.To4()
+	if ip == nil {
+		ip = sIP.To16()
+	}
+	if ip == nil {
+		return nil, fmt.Errorf("invalid IP address: %v", sIP)
+	}
+
+	ones, bits := mask.Size()
+	if ones == 0 && bits == 0 {
+		return nil, fmt.Errorf("invalid mask: %v", mask)
+	}
+
+	// Calculate subnet size (number of addresses per subnet)
+	subnetSize := uint64(1) << (uint(bits) - uint(ones))
+
+	// Convert IP to integer
+	var ipInt uint64
+	if ip.To4() != nil {
+		ipInt = uint64(binary.BigEndian.Uint32(ip))
+	} else {
+		// For simplicity, only handle IPv4 in this example
+		return nil, fmt.Errorf("IPv6 not yet supported")
+	}
+
+	// Compute the next subnet's base IP
+	nextIPInt := ipInt + subnetSize
+	nextIP := make(net.IP, len(ip))
+	binary.BigEndian.PutUint32(nextIP, uint32(nextIPInt))
+
+	return nextIP, nil
+}
+
 func NewNetManger(db *pgxpool.Pool, ctx context.Context, logger *slog.Logger) *NetManager {
 	return &NetManager{
 		logger,
@@ -240,11 +281,43 @@ func (m *NetManager) checkUserNetwork(userId int32) (bool, error) {
 	return has, nil
 }
 
+func sortNetworksByCIDR(networks []repository.Network) {
+	sort.Slice(networks, func(i, j int) bool {
+		ip1 := networks[i].Cidr.IP
+		ip2 := networks[j].Cidr.IP
+
+		// Convert both IPs to 4-byte IPv4 format
+		ip1 = ip1.To4()
+		ip2 = ip2.To4()
+
+		// Handle possible nils (invalid CIDRs)
+		if ip1 == nil || ip2 == nil {
+			return false
+		}
+
+		// Compare as uint32
+		i1 := binary.BigEndian.Uint32(ip1)
+		i2 := binary.BigEndian.Uint32(ip2)
+
+		if i1 != i2 {
+			return i1 < i2
+		}
+
+		// If IPs are equal, compare prefix lengths (shorter prefix = larger subnet)
+		ones1, _ := networks[i].Cidr.Mask.Size()
+		ones2, _ := networks[j].Cidr.Mask.Size()
+		return ones1 < ones2
+	})
+}
+
 func (m *NetManager) CreateNetwork(networkName string, owner string, hosts int) (*repository.Network, error) {
-	userId := int32(0) // todo: rework function to use arguments
+	userId, err := m.repo.FindUserId(m.ctx, owner)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to find userId of owner %s: %w", owner, err))
+	}
 	has, err := m.checkUserNetwork(userId)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(fmt.Errorf("failed to check user network: %w", err))
 	}
 
 	if has {
@@ -253,26 +326,44 @@ func (m *NetManager) CreateNetwork(networkName string, owner string, hosts int) 
 
 	nets, err := m.repo.ListNetworks(m.ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(fmt.Errorf("failed to list networks: %w", err))
 	}
 
-	// todo: assume networks are not sorted
-	subnetIP := nets[len(nets)-1].Cidr.IP
+	sortNetworksByCIDR(nets)
+	var subnetIP net.IP
+	if len(nets) > 0 {
+		subnetIP = nets[len(nets)-1].Cidr.IP
+	} else {
+		subnetIP, _, err = net.ParseCIDR(STARTING_SUBNET)
+		if err != nil {
+			return nil, errors.Join(fmt.Errorf("failed to parse starting CIDR: %w", err))
+		}
+	}
 
 	mask, err := MaskForHosts(10) // todo: consider dynamic number of hosts
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(fmt.Errorf("failed to create mask: %w", err))
 	}
 
-	newSubnet, err := NextSubnet(&subnetIP, &mask)
+	newSubnet, err := NextSubnet2(subnetIP, mask)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(fmt.Errorf("failed to create next subnet: %w", err))
+	}
+
+	// first check if user exist
+	exist, err := m.repo.IsUserExist(m.ctx, userId)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to check user exist: %w", err))
+	}
+
+	if !exist {
+		return nil, errors.Join(fmt.Errorf("user %d does not exist", userId))
 	}
 
 	n, err := m.repo.CreateNetwork(m.ctx, repository.CreateNetworkParams{
-		Name: "",
+		Name: networkName,
 		Cidr: net.IPNet{
-			IP:   *newSubnet,
+			IP:   newSubnet,
 			Mask: mask,
 		},
 		OwnerID: pgtype.Int4{
@@ -281,7 +372,7 @@ func (m *NetManager) CreateNetwork(networkName string, owner string, hosts int) 
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(fmt.Errorf("failed to insert new network: %w", err))
 	}
 
 	m.logger.Info(fmt.Sprintf("New network created. CIDR: %s for User: %d.", &n.Cidr, userId))

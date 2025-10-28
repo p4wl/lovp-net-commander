@@ -43,3 +43,10 @@ FROM users u
 JOIN network_members nm ON nm.user_id = u.id
 WHERE nm.network_id = $1;
 
+-- name: IsUserExist :one
+SELECT EXISTS (
+    SELECT 1 FROM users u WHERE u.id = $1
+) AS user_exist;
+
+-- name: FindUserId :one
+SELECT id FROM users where username = $1;
